@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="cinnamon-applets-world_clock_calendar">
+    <schema path="/org/cinnamon/applets/sw_calendar/" id="org.cinnamon.applets.world_clock_calendar">
+        <key type="a(ss)" name="worldclocks">
+            <default>[]</default>
+            <summary>List of time-zones to display</summary>
+            <description>A list of time-zones to display in the calendar window. Each entry is a tuple of display name and time-zone.</description>
+        </key>
+    </schema>
+</schemalist>

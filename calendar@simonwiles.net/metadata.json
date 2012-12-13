@@ -1,0 +1,12 @@
+{
+  "worldclocks": [
+    [
+      "London",
+      "Europe/London"
+    ]
+  ],
+  "description": "Fork of the Cinnamon calendar applet with support for displaying multiple timezones",
+  "uuid": "calendar@simonwiles.net",
+  "settings-schema": "org.cinnamon.applets.world_clock_calendar",
+  "name": "World Clock Calendar"
+}
