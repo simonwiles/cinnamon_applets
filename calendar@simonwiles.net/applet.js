@@ -241,7 +241,9 @@ MyApplet.prototype = {
 };
 
 function main(metadata, orientation, panel_height) {
-    settings = getSettings(SCHEMA_NAME, APPLET_DIR);
+    // deprecated in favour of storing the clocks in metadata.json, because I can't work out how to unpack a GVariant from GSettings
+    //  in javascripts/GJS (see: http://stackoverflow.com/questions/13736695/unpacking-gvariant-in-javascript)
+    //settings = getSettings(SCHEMA_NAME, APPLET_DIR);
     let myApplet = new MyApplet(metadata, orientation, panel_height);
     return myApplet;
 }
