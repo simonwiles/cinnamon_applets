@@ -1,17 +1,6 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-"""
-
-v0.2 - switched to using metadata JSON to store settings, since I can't work
-       out how to unpack a GVariant retreived from GSettings in GJS.  see:
-       stackoverflow.com/questions/13736695/unpacking-gvariant-in-javascript
-
-"""
-
-
-from __future__ import unicode_literals
-
 __program_name__ = 'settings.py'
 __author__ = 'Simon Wiles'
 __email__ = 'simonjwiles@gmail.com'
@@ -36,11 +25,16 @@ METADATA = json.load(codecs.open(
                        os.path.join(APPLET_DIR, 'metadata.json'), 'r', 'utf8'))
 SETTINGS = None
 
+# i18n
+from gettext import gettext as _
+#import gettext
+#gettext.install('cinnamon', '/usr/share/cinnamon/locale')
+
 
 def get_settings(schema_name):
     """ Get settings values from corresponding schema file """
 
-    from gi.repository import Gio
+    from gi.repository import Gio # pylint: disable-msg=E0611
 
     # Try to get schema from local installation directory
     schemas_dir = os.path.join(APPLET_DIR, 'schemas')
@@ -61,7 +55,7 @@ def get_timezones():
         timezones_tab = '/usr/share/lib/zoneinfo/tab/zone_sun.tab'
 
     if not os.path.exists(timezones_tab):
-        return liststore_timezones
+        return []
 
     timezones = subprocess.check_output(
                         ['/usr/bin/awk', '!/#/ {print $3}', timezones_tab])
@@ -75,21 +69,25 @@ class SettingsWindow(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self, title=METADATA['name'])
 
-        self.set_size_request(400, 250)
+        self.set_size_request(400, 300)
+        self.set_position(Gtk.WindowPosition.CENTER)
         self.connect('delete-event', self._exit_application)
         self.connect('destroy', self._exit_application)
 
         frame = Gtk.Box(
              orientation=Gtk.Orientation.VERTICAL, border_width=10, spacing=10)
+
+        hbox = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, border_width=0, spacing=10)
+
         scrolled_window = Gtk.ScrolledWindow()
         scrolled_window.set_policy(
                             Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
 
         self.liststore_worldclocks = Gtk.ListStore(str, str)
 
-        #for item in SETTINGS.get_value('worldclocks'):
-        for item in METADATA.get('worldclocks', []):
-            self.liststore_worldclocks.append(item)
+        for item in SETTINGS.get_value('worldclocks'):
+            self.liststore_worldclocks.append(item.split('|'))
 
         self.treeview = Gtk.TreeView(model=self.liststore_worldclocks)
 
@@ -119,17 +117,42 @@ class SettingsWindow(Gtk.Window):
         scrolled_window.add(self.treeview)
         self.treeview.show()
 
-        frame.pack_start(scrolled_window, True, True, 0)
+        # right-hand buttons
+        hbox.pack_start(scrolled_window, True, True, 0)
+        align = Gtk.Alignment()
+        align.set(0.5, 0.5, 0, 0)
+        vbox = Gtk.VBox()
 
-        label = Gtk.Label(
-                'Drag and Drop to re-order clocks.')
-        frame.pack_start(label, False, False, 0)
+        buttons = (
+            ('top', Gtk.STOCK_GOTO_TOP),
+            ('up', Gtk.STOCK_GO_UP),
+            ('down', Gtk.STOCK_GO_DOWN),
+            ('bottom', Gtk.STOCK_GOTO_BOTTOM),
+        )
 
-        label = Gtk.Label(
-                'Note: Cinnamon must be restarted for changes to take effect.')
-        frame.pack_start(label, False, False, 0)
+        for button in buttons:
+            img = Gtk.Image()
+            img.set_from_stock(button[1], Gtk.IconSize.BUTTON)
+            btn = Gtk.Button(image=img)
+            btn.connect('clicked', self._reorder, button[0])
+            vbox.pack_start(btn, False, False, 0)
 
-        # Buttons box
+        align.add(vbox)
+        hbox.pack_end(align, False, False, 0)
+
+        frame.pack_start(hbox, True, True, 0)
+
+        # time format for World Clocks
+        time_format = SETTINGS.get_string('time-format')
+        hbox = Gtk.HBox()
+        label = Gtk.Label(_('Time format for World Clocks'))
+        self.entry_timeformat = Gtk.Entry()
+        hbox.pack_start(label, False, False, 5)
+        hbox.add(self.entry_timeformat)
+        self.entry_timeformat.set_text(time_format)
+        frame.pack_start(hbox, False, False, 0)
+
+        # bottom buttons
         box_buttons = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL, border_width=0, spacing=10)
 
@@ -146,6 +169,8 @@ class SettingsWindow(Gtk.Window):
         box_buttons.pack_end(btn_close, False, False, 0)
 
         btn_clear = Gtk.Button(stock=Gtk.STOCK_CLEAR)
+        btn_clear = Gtk.Button.new_from_stock(Gtk.STOCK_CLEAR)
+
         btn_clear.connect('clicked', self._clear_entries)
         box_buttons.pack_end(btn_clear, False, False, 0)
 
@@ -154,6 +179,21 @@ class SettingsWindow(Gtk.Window):
         frame.show_all()
         self.add(frame)
         self.show_all()
+
+    def _reorder(self, widget, action):
+        tsel = self.treeview.get_selection()
+        liststore, treeiter = tsel.get_selected()
+        if treeiter is None:
+            return
+        if action == 'top':
+            liststore.move_after(treeiter, None)
+        if action == 'up' and liststore.get_string_from_iter(treeiter) != '0':
+            liststore.move_before(treeiter, liststore.iter_previous(treeiter))
+        if action == 'down' and \
+           int(liststore.get_string_from_iter(treeiter)) + 1 != len(liststore):
+            liststore.move_after(treeiter, liststore.iter_next(treeiter))
+        if action == 'bottom':
+            liststore.move_before(treeiter, None)
 
     def _on_label_edited(self, widget, path, new_value):
         self.liststore_worldclocks[path][0] = new_value
@@ -168,21 +208,17 @@ class SettingsWindow(Gtk.Window):
 
     def _add_entry(self, widget):
         self.liststore_worldclocks.insert(
-                      len(self.liststore_worldclocks), ('[]', 'Europe/London'))
+                  len(self.liststore_worldclocks), ('London', 'Europe/London'))
 
     def _remove_entry(self, widget):
         self.liststore_worldclocks.remove(
                                self.treeview.get_selection().get_selected()[1])
 
     def _save_settings(self):
-        #SETTINGS.set_value('worldclocks', GLib.Variant('a(ss)',
-                          #[tuple(row) for row in self.liststore_worldclocks]))
-
-        worldclocks = METADATA.get('worldclocks', [])
-        worldclocks = [tuple(row) for row in self.liststore_worldclocks]
-        METADATA['worldclocks'] = worldclocks
-        metadata_path = os.path.join(APPLET_DIR, 'metadata.json')
-        json.dump(METADATA, codecs.open(metadata_path, 'w', 'utf8'), indent=2)
+        print [row[0] for row in self.liststore_worldclocks]
+        SETTINGS.set_value('worldclocks', GLib.Variant('as',
+                       ['|'.join(row) for row in self.liststore_worldclocks]))
+        SETTINGS.set_string('time-format', self.entry_timeformat.get_text())
 
     def _exit_application(self, *args):
         try:
@@ -237,7 +273,7 @@ class CellRendererAutoComplete(Gtk.CellRendererText):
 
     def focus_out(self, entry, event, path):
         """ to ensure that changes are saved when the dialogue is closed with
-            the widget still focussed, I'm emitting 'edited' on this even
+            the widget still focussed, I'm emitting 'edited' on this event
             instead of 'editing-done'. The is probably not the correct way,
             but it works very nicely :) """
         new_value = entry.get_text()
@@ -249,7 +285,7 @@ class CellRendererAutoComplete(Gtk.CellRendererText):
 if __name__ == "__main__":
 
     # Initialize and load gsettings values
-    #SETTINGS = get_settings(METADATA['settings-schema'])
+    SETTINGS = get_settings(METADATA['settings-schema'])
 
     SettingsWindow()
     Gtk.main()

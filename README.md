@@ -14,6 +14,11 @@ Features:
 * Settings dialogue to add/remove/edit/re-order clocks.
 * Tool-tip shows the additional clocks.
 
+Changes:
+--------
+* v0.4 -- Updated to use GSettings (now updates automatically when the settings are changed, without the need to restart Cinnamon).
+* v0.3 -- fix to work with older versions of GLib (e.g. on Fedora 17).  Thanks to [Pulsar](http://cinnamon-spices.linuxmint.com/users/view/1154).
+
 Credits:
 --------
 * Clem and the Mint Team for the original calendar applet
