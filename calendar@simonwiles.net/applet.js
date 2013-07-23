@@ -130,6 +130,8 @@ MyApplet.prototype = {
                 this._worldclock_labels = [];
                 for (i in worldclocks) { this._worldclocks[i] = worldclocks[i].split('|'); }
                 for (i in this._worldclocks) {
+                    this._worldclocks[i][1] = new GLib.TimeZone.new(this._worldclocks[i][1]);
+
                     let tz = new St.BoxLayout({vertical: false})
                     let tz_label = new St.Label({ style_class: 'datemenu-date-label', text: this._worldclocks[i][0] });
                     tz.add(tz_label, {x_align: St.Align.START, expand: true, x_fill: false})
@@ -169,13 +171,13 @@ MyApplet.prototype = {
     },
 
     _updateClockAndDate: function() {
-        let displayDate = new Date();
-        let dateFormattedFull = displayDate.toLocaleFormat(this._dateFormatFull);
-        this.set_applet_label(displayDate.toLocaleFormat(this._dateFormat));
+        let displayDate = new GLib.DateTime.new_now_local();
+        let dateFormattedFull = displayDate.format(this._dateFormatFull);
+        this.set_applet_label(displayDate.format(this._dateFormat));
 
         let tooltip = [];
         for (i in this._worldclocks) {
-            let tz = this.get_world_time(this._worldclocks[i][1])
+            let tz = this.get_world_time(displayDate, this._worldclocks[i][1])
             this._worldclock_labels[i].set_text(tz);
             tooltip.push(rpad(this._worldclocks[i][0], ' ', 20) + tz);
         }
@@ -246,11 +248,9 @@ MyApplet.prototype = {
             _('Edit World Clocks'), Gtk.STOCK_EDIT, Lang.bind(this, this._onLaunchWorldClockSettings)));
     },
 
-    get_world_time: function(tz) {
-        // pass "new Array()" as the first argument, instead of null, because Fedora 17 has an old version of GLib
-        let env = GLib.environ_setenv (new Array(), 'TZ', tz, 1);
-        let [res, out, err, status] = GLib.spawn_sync(
-                null, ['date', '+' + this._worldclock_timeformat], env, GLib.SpawnFlags.SEARCH_PATH, null);
+    get_world_time: function(time, tz) {
+        worldTime = time.to_timezone(tz);
+        out = worldTime.format(this._worldclock_timeformat);
         return out.toString().trim();
     }
 
