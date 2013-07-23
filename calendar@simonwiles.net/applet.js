@@ -130,7 +130,7 @@ MyApplet.prototype = {
                 this._worldclock_labels = [];
                 for (i in worldclocks) { this._worldclocks[i] = worldclocks[i].split('|'); }
                 for (i in this._worldclocks) {
-                    this._worldclocks[i][1] = new GLib.TimeZone.new(this._worldclocks[i][1]);
+                    this._worldclocks[i][1] = GLib.TimeZone.new(this._worldclocks[i][1]);
 
                     let tz = new St.BoxLayout({vertical: false})
                     let tz_label = new St.Label({ style_class: 'datemenu-date-label', text: this._worldclocks[i][0] });
@@ -171,7 +171,7 @@ MyApplet.prototype = {
     },
 
     _updateClockAndDate: function() {
-        let displayDate = new GLib.DateTime.new_now_local();
+        let displayDate = GLib.DateTime.new_now_local();
         let dateFormattedFull = displayDate.format(this._dateFormatFull);
         this.set_applet_label(displayDate.format(this._dateFormat));
 
