@@ -1,7 +1,7 @@
 /*
  *   World Clock Calendar applet calendar@simonwiles.net
  *   Fork of the Cinnamon calendar applet with support for displaying multiple timezones.
- *   version 0.4
+ *   version 0.5
  */
 
 const EXTENSION_UUID = "calendar@simonwiles.net";
