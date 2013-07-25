@@ -249,9 +249,7 @@ MyApplet.prototype = {
     },
 
     get_world_time: function(time, tz) {
-        worldTime = time.to_timezone(tz);
-        out = worldTime.format(this._worldclock_timeformat);
-        return out.toString().trim();
+        return time.to_timezone(tz).format(this._worldclock_timeformat).trim();
     }
 
 };
