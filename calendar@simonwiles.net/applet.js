@@ -1,7 +1,7 @@
 /*
  *   World Clock Calendar applet calendar@simonwiles.net
  *   Fork of the Cinnamon calendar applet with support for displaying multiple timezones.
- *   version 0.4
+ *   version 0.5
  */
 
 const EXTENSION_UUID = "calendar@simonwiles.net";
@@ -249,8 +249,8 @@ MyApplet.prototype = {
     },
 
     get_world_time: function(time, tz) {
-        worldTime = time.to_timezone(tz);
-        out = worldTime.format(this._worldclock_timeformat);
+        let worldTime = time.to_timezone(tz);
+        let out = worldTime.format(this._worldclock_timeformat);
         return out.toString().trim();
     }
 
