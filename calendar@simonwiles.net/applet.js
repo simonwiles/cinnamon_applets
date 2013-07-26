@@ -1,7 +1,7 @@
 /*
  *   World Clock Calendar applet calendar@simonwiles.net
  *   Fork of the Cinnamon calendar applet with support for displaying multiple timezones.
- *   version 0.5
+ *   version 0.6
  */
 
 const EXTENSION_UUID = "calendar@simonwiles.net";
@@ -42,7 +42,7 @@ function getSettings(schemaName, appletDir) {
 
     // Check if schemas are available in .local or if it's installed system-wide
     if (GLib.file_test(schemaDir + '/gschemas.compiled', GLib.FileTest.EXISTS)) {
-        schemaSource = Gio.SettingsSchemaSource.new_from_directory(schemaDir, Gio.SettingsSchemaSource.get_default(), false);
+        let schemaSource = Gio.SettingsSchemaSource.new_from_directory(schemaDir, Gio.SettingsSchemaSource.get_default(), false);
         let schema = schemaSource.lookup(schemaName, false);
         return new Gio.Settings({ settings_schema: schema });
     } else {
@@ -125,7 +125,7 @@ MyApplet.prototype = {
                 //  full width of the applet drop-down (in case the world clocks are very wide!)
                 vbox.add(this._worldclocks_box);
                 this._worldclock_timeformat = this._worldclockSettings.get_string('time-format');
-                worldclocks = this._worldclockSettings.get_strv('worldclocks');
+                let worldclocks = this._worldclockSettings.get_strv('worldclocks');
                 this._worldclocks = [];
                 this._worldclock_labels = [];
                 for (i in worldclocks) { this._worldclocks[i] = worldclocks[i].split('|'); }

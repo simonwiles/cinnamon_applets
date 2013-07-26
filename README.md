@@ -5,7 +5,7 @@ UUID: calendar@simonwiles.net
 
 A fork of the Cinnamon calendar applet with support for displaying multiple timezones.
 
-Current Version: 0.5 (2013-06-23).
+Current Version: 0.6 (2013-06-25).
 
 ![World Clock Calendar Screenshot](https://raw.github.com/simonwiles/cinnamon_applets/master/calendar_screenshot.png "World Clock Calendar Screenshot")
 
@@ -16,8 +16,13 @@ Features:
 * Settings dialogue to add/remove/edit/re-order clocks.
 * Tool-tip shows the additional clocks.
 
+Notes:
+------
+* The times and dates will be formatted according to the system locale settings, specifically `LC_TIME` (as with the default Calendar applet).  If you wish to change this, you can use (e.g.) `sudo update-locale LC_TIME=zh_TW.UTF-8` (you will need to log out and in again for changes to take effect).
+
 Version History:
---------
+----------------
+* v0.6 (2013-06-25) -- minor optimization.
 * v0.5 (2013-06-23) -- Updated to use `GLib.DateTime` and `TimeZone` to handle the timezone conversion (credit to Maciej Katafiasz, a.k.a. [mathrick](https://github.com/mathrick)).
 * v0.4 (2012-12-25) -- Updated to use `GSettings` (now updates automatically when the settings are changed, without the need to restart Cinnamon).
 * v0.3 (2012-12-20) -- fix to work with older versions of `GLib` (e.g. on Fedora 17).  Thanks to [Pulsar](http://cinnamon-spices.linuxmint.com/users/view/1154).
