@@ -1,8 +1,9 @@
 /*
  *   World Clock Calendar applet calendar@simonwiles.net
  *   Fork of the Cinnamon calendar applet with support for displaying multiple timezones.
- *   version 0.6
+ *   version 1.0
  */
+
 
 const EXTENSION_UUID = "calendar@simonwiles.net";
 const APPLET_DIR = imports.ui.appletManager.appletMeta[EXTENSION_UUID].path;
@@ -15,12 +16,17 @@ const Clutter = imports.gi.Clutter;
 const St = imports.gi.St;
 const Util = imports.misc.util;
 const PopupMenu = imports.ui.popupMenu;
-const Calendar = imports.ui.calendar;
 const UPowerGlib = imports.gi.UPowerGlib;
+const Settings = imports.ui.settings;
+const AppletDir = imports.ui.appletManager.applets[EXTENSION_UUID];
+const Calendar = AppletDir.calendar;
 const GLib = imports.gi.GLib;
 const Gtk = imports.gi.Gtk;
 
-function _onVertSepRepaint(area) {
+let DEFAULT_FORMAT = _("%l:%M %p");
+
+function _onVertSepRepaint (area)
+{
     let cr = area.get_context();
     let themeNode = area.get_theme_node();
     let [width, height] = area.get_surface_size();
@@ -35,51 +41,37 @@ function _onVertSepRepaint(area) {
     cr.stroke();
 };
 
-function getSettings(schemaName, appletDir) {
-    /* get settings from GSettings */
-
-    let schemaDir = appletDir + '/schemas';
-
-    // Check if schemas are available in .local or if it's installed system-wide
-    if (GLib.file_test(schemaDir + '/gschemas.compiled', GLib.FileTest.EXISTS)) {
-        let schemaSource = Gio.SettingsSchemaSource.new_from_directory(schemaDir, Gio.SettingsSchemaSource.get_default(), false);
-        let schema = schemaSource.lookup(schemaName, false);
-        return new Gio.Settings({ settings_schema: schema });
-    } else {
-        if (Gio.Settings.list_schemas().indexOf(schemaName) == -1)
-            throw "Schema \"%s\" not found.".format(schemaName);
-        return new Gio.Settings({ schema: schemaName });
-    }
-
-};
-
 function rpad(str, pad_with, length) {
     while (str.length < length) { str = str + pad_with; }
     return str;
 }
 
-function MyApplet(orientation, panel_height) {
-    this._init(orientation, panel_height);
+function MyApplet(orientation, panel_height, instance_id) {
+    this._init(orientation, panel_height, instance_id);
 }
 
 MyApplet.prototype = {
     __proto__: Applet.TextApplet.prototype,
 
-    _init: function(metadata, orientation, panel_height) {
-        Applet.TextApplet.prototype._init.call(this, orientation, panel_height);
+    _init: function(orientation, panel_height, instance_id) {
+        Applet.TextApplet.prototype._init.call(this, orientation, panel_height, instance_id);
 
         try {
+
+            this.settings = new Settings.AppletSettings(this, EXTENSION_UUID, this.instance_id);
+
             this.menuManager = new PopupMenu.PopupMenuManager(this);
 
-            this._metadata = metadata;
             this._orientation = orientation;
 
             this._initContextMenu();
+            this._initRightClickMenu();
 
             this._calendarArea = new St.BoxLayout({name: 'calendarArea' });
             this.menu.addActor(this._calendarArea);
 
             // Fill up the first column
+
             let vbox = new St.BoxLayout({vertical: true});
             this._calendarArea.add(vbox);
 
@@ -92,43 +84,25 @@ MyApplet.prototype = {
             this._eventList = null;
 
             // Calendar
-            this._calendar = new Calendar.Calendar(this._eventSource);
+            this._calendar = new Calendar.Calendar(this._eventSource, this.settings);
             vbox.add(this._calendar.actor);
 
+
+            // World Clocks
             let separator = new PopupMenu.PopupSeparatorMenuItem();
             separator.setColumnWidths(1);
             vbox.add(separator.actor, {y_align: St.Align.END, expand: true, y_fill: false});
 
-            // Done with hbox for calendar and event list
-
-            // Track changes to clock settings
-            this._calendarSettings = new Gio.Settings({ schema: 'org.cinnamon.calendar' });
-            this._dateFormat = null;
-            this._dateFormatFull = null;
-            let getCalendarSettings = Lang.bind(this, function() {
-                this._dateFormat = this._calendarSettings.get_string('date-format');
-                this._dateFormatFull = this._calendarSettings.get_string('date-format-full');
-                this._updateClockAndDate();
-            });
-            this._calendarSettings.connect('changed', getCalendarSettings);
-
-            // https://bugzilla.gnome.org/show_bug.cgi?id=655129
-            this._upClient = new UPowerGlib.Client();
-            this._upClient.connect('notify-resume', getCalendarSettings);
-
-            // World Clocks
-            this._worldclockSettings = getSettings(metadata['settings-schema'], APPLET_DIR);
             let addWorldClocks = Lang.bind(this, function() {
                 if (this._worldclocks_box) { this._worldclocks_box.destroy(); }
                 this._worldclocks_box = new St.BoxLayout({vertical: true});
                 // add to the calendarArea vbox instead of a new worldclocksArea so that the calendar resizes to the
                 //  full width of the applet drop-down (in case the world clocks are very wide!)
                 vbox.add(this._worldclocks_box);
-                this._worldclock_timeformat = this._worldclockSettings.get_string('time-format');
-                let worldclocks = this._worldclockSettings.get_strv('worldclocks');
+
                 this._worldclocks = [];
                 this._worldclock_labels = [];
-                for (i in worldclocks) { this._worldclocks[i] = worldclocks[i].split('|'); }
+                for (i in this.worldclocks) { this._worldclocks[i] = this.worldclocks[i].split('|'); }
                 for (i in this._worldclocks) {
                     this._worldclocks[i][1] = GLib.TimeZone.new(this._worldclocks[i][1]);
 
@@ -139,16 +113,29 @@ MyApplet.prototype = {
                     tz.add(this._worldclock_labels[i], {x_align: St.Align.END, expand: true, x_fill: false})
                     this._worldclocks_box.add(tz);
                 }
+                this.max_length = this._worldclocks.reduce(function (a, b) { return a[0].length > b[0].length ? a : b; })[0].length;
             });
-            this._worldclockSettings.connect('changed', addWorldClocks);
+
+            // Track changes to clock settings
+            this._dateFormat = DEFAULT_FORMAT;
+            this._dateFormatFull = _("%A %B %e, %Y");
+
+            this.settings.bindProperty(Settings.BindingDirection.IN, "use-custom-format", "use_custom_format", this.on_settings_changed, null);
+            this.settings.bindProperty(Settings.BindingDirection.IN, "custom-format", "custom_format", this.on_settings_changed, null);
+
+            // https://bugzilla.gnome.org/show_bug.cgi?id=655129
+            this._upClient = new UPowerGlib.Client();
+            this._upClient.connect('notify-resume', this._updateClockAndDate);
+
+            // Track changes to world-clock settings
+            this.settings.bindProperty(Settings.BindingDirection.IN, "worldclocks", "worldclocks", addWorldClocks, null);
+            this.settings.bindProperty(Settings.BindingDirection.IN, "worldclocks-timeformat", "worldclocks_timeformat", addWorldClocks, null);
             this._upClient.connect('notify-resume', addWorldClocks);
 
             // Start the clock
-            getCalendarSettings();
+            this.on_settings_changed();
             addWorldClocks();
             this._updateClockAndDatePeriodic();
-            this.createContextMenu();
-
         }
         catch (e) {
             global.logError(e);
@@ -159,27 +146,41 @@ MyApplet.prototype = {
         this.menu.toggle();
     },
 
-    _onLaunchSettings: function() {
-        this.menu.close();
-        Util.spawnCommandLine("cinnamon-settings calendar");
+    on_settings_changed: function() {
+        if (this.use_custom_format) {
+            this._dateFormat = this.custom_format;
+        } else {
+            this._dateFormat = DEFAULT_FORMAT;
+        }
+        this._updateClockAndDate();
     },
 
-    _onLaunchWorldClockSettings: function() {
+    on_custom_format_button_pressed: function() {
+        Util.spawnCommandLine("xdg-open http://www.foragoodstrftime.com/");
+    },
+
+    _launch_dateandtime_settings: function() {
         this.menu.close();
-        let settingsFile = APPLET_DIR + "/world_clock_calendar_settings.py";
-        Util.spawnCommandLine("python " + settingsFile);
+        Util.spawnCommandLine("cinnamon-settings calendar");
     },
 
     _updateClockAndDate: function() {
         let displayDate = GLib.DateTime.new_now_local();
         let dateFormattedFull = displayDate.format(this._dateFormatFull);
-        this.set_applet_label(displayDate.format(this._dateFormat));
+        let label_string = displayDate.format(this._dateFormat);
+
+        if (!label_string) {
+            global.logError("Calendar applet: bad time format string - check your string.");
+            label_string = "~CLOCK FORMAT ERROR~ " + displayDate.toLocaleFormat(DEFAULT_FORMAT);
+        }
+        this.set_applet_label(label_string);
 
         let tooltip = [];
+        tooltip.push(dateFormattedFull);
         for (i in this._worldclocks) {
-            let tz = this.get_world_time(displayDate, this._worldclocks[i][1])
+            let tz = this._get_world_time(displayDate, this._worldclocks[i][1])
             this._worldclock_labels[i].set_text(tz);
-            tooltip.push(rpad(this._worldclocks[i][0], ' ', 20) + tz);
+            tooltip.push(rpad(this._worldclocks[i][0], '\xA0', this.max_length + 10) + tz);
         }
         this.set_applet_tooltip(tooltip.join('\n'));
 
@@ -241,20 +242,30 @@ MyApplet.prototype = {
         this._initContextMenu();
     },
 
-    createContextMenu: function () {
-        this._applet_context_menu.addMenuItem(new Applet.MenuItem(
-            _('Date and Time Settings'), Gtk.STOCK_EDIT, Lang.bind(this, this._onLaunchSettings)));
-        this._applet_context_menu.addMenuItem(new Applet.MenuItem(
-            _('Edit World Clocks'), Gtk.STOCK_EDIT, Lang.bind(this, this._onLaunchWorldClockSettings)));
+    _get_world_time: function(time, tz) {
+        return time.to_timezone(tz).format(this.worldclocks_timeformat).trim();
     },
 
-    get_world_time: function(time, tz) {
-        return time.to_timezone(tz).format(this._worldclock_timeformat).trim();
-    }
+    _launch_applet_config: function() {
+        Util.spawn(['cinnamon-settings', 'applets', EXTENSION_UUID]);
+    },
+
+    _launch_worldclocks_config: function() {
+        Util.spawnCommandLine("python " + APPLET_DIR + "/world_clock_calendar_settings.py");
+    },
+
+    _initRightClickMenu: function () {
+        this._applet_context_menu.addMenuItem(new Applet.MenuItem(
+            _('Configure applet'), 'system-run-symbolic', Lang.bind(this, this._launch_applet_config)));
+        this._applet_context_menu.addMenuItem(new Applet.MenuItem(
+            _('Edit World Clocks'), 'system-run-symbolic', Lang.bind(this, this._launch_worldclocks_config)));
+        this._applet_context_menu.addMenuItem(new Applet.MenuItem(
+            _('Date and Time Settings'), 'system-run-symbolic', Lang.bind(this, this._launch_dateandtime_settings)));
+    },
 
 };
 
-function main(metadata, orientation, panel_height) {
-    let myApplet = new MyApplet(metadata, orientation, panel_height);
+function main(metadata, orientation, panel_height, instance_id) {
+    let myApplet = new MyApplet(orientation, panel_height, instance_id);
     return myApplet;
 }

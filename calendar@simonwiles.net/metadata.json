@@ -1,6 +1,6 @@
 {
-  "description": "Fork of the Cinnamon calendar applet with support for displaying multiple timezones",
-  "uuid": "calendar@simonwiles.net",
-  "settings-schema": "org.cinnamon.applets.world_clock_calendar",
-  "name": "World Clock Calendar"
+ "uuid": "calendar@simonwiles.net",
+ "name": "World Clock Calendar",
+ "description": "Fork of the Cinnamon calendar applet with support for displaying multiple timezones",
+ "icon": "stock_calendar"
 }

@@ -1,16 +1,20 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-__program_name__ = 'settings.py'
+""" Settings Dialogue for World Clock Calendar Applet """
+
+__program_name__ = 'Settings Dialogue for World Clock Calendar Applet'
 __author__ = 'Simon Wiles'
 __email__ = 'simonjwiles@gmail.com'
 __copyright__ = 'Copyright 2012, Simon Wiles'
 __license__ = 'GPL http://www.gnu.org/licenses/gpl.txt'
-__date__ = '2012-12'
+__date__ = '2012-2013'
 
-import codecs
+import collections
+import io
 import os
 import subprocess
+
 from gi.repository import Gtk, GLib  # pylint: disable-msg=E0611
 
 # prefer simplejson if available (it's faster), and fallback to json
@@ -21,9 +25,6 @@ except ImportError:
     import json
 
 APPLET_DIR = os.path.dirname(os.path.abspath(__file__))
-METADATA = json.load(codecs.open(
-                       os.path.join(APPLET_DIR, 'metadata.json'), 'r', 'utf8'))
-SETTINGS = None
 
 # i18n
 from gettext import gettext as _
@@ -31,43 +32,16 @@ from gettext import gettext as _
 #gettext.install('cinnamon', '/usr/share/cinnamon/locale')
 
 
-def get_settings(schema_name):
-    """ Get settings values from corresponding schema file """
-
-    from gi.repository import Gio # pylint: disable-msg=E0611
-
-    # Try to get schema from local installation directory
-    schemas_dir = os.path.join(APPLET_DIR, 'schemas')
-    if os.path.isfile(os.path.join(schemas_dir, 'gschemas.compiled')):
-        schema_source = Gio.SettingsSchemaSource.new_from_directory(
-                    schemas_dir, Gio.SettingsSchemaSource.get_default(), False)
-        schema = schema_source.lookup(schema_name, False)
-        return Gio.Settings.new_full(schema, None, None)
-    else:
-        # Schema is installed system-wide
-        return Gio.Settings.new(schema_name)
-
-
-def get_timezones():
-
-    timezones_tab = '/usr/share/zoneinfo/zone.tab'
-    if not os.path.exists(timezones_tab):
-        timezones_tab = '/usr/share/lib/zoneinfo/tab/zone_sun.tab'
-
-    if not os.path.exists(timezones_tab):
-        return []
-
-    timezones = subprocess.check_output(
-                        ['/usr/bin/awk', '!/#/ {print $3}', timezones_tab])
-
-    return sorted(timezones.strip('\n').split('\n'))
-
-
 class SettingsWindow(Gtk.Window):
     """ Build settings panel window """
 
     def __init__(self):
-        Gtk.Window.__init__(self, title=METADATA['name'])
+
+        metadata = json.load(io.open(
+            os.path.join(APPLET_DIR, 'metadata.json'), 'r', encoding='utf8'))
+
+        self.settings = AppletSettings(metadata['uuid'])
+        Gtk.Window.__init__(self, title=metadata['name'])
 
         self.set_size_request(400, 300)
         self.set_position(Gtk.WindowPosition.CENTER)
@@ -75,18 +49,18 @@ class SettingsWindow(Gtk.Window):
         self.connect('destroy', self._exit_application)
 
         frame = Gtk.Box(
-             orientation=Gtk.Orientation.VERTICAL, border_width=10, spacing=10)
+            orientation=Gtk.Orientation.VERTICAL, border_width=10, spacing=10)
 
         hbox = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL, border_width=0, spacing=10)
 
         scrolled_window = Gtk.ScrolledWindow()
         scrolled_window.set_policy(
-                            Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+            Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
 
         self.liststore_worldclocks = Gtk.ListStore(str, str)
 
-        for item in SETTINGS.get_value('worldclocks'):
+        for item in self.settings.get('worldclocks'):
             self.liststore_worldclocks.append(item.split('|'))
 
         self.treeview = Gtk.TreeView(model=self.liststore_worldclocks)
@@ -101,10 +75,10 @@ class SettingsWindow(Gtk.Window):
         self.treeview.append_column(col)
 
         # Timezones column
-        timezones = get_timezones()
+        timezones = self._get_timezones()
 
         cellrendererautocomplete = CellRendererAutoComplete(
-                              timezones, match_anywhere=True, force_match=True)
+            timezones, match_anywhere=True, force_match=True)
         cellrendererautocomplete.set_property('editable', True)
         cellrendererautocomplete.connect('edited', self._on_tz_edited)
         col = Gtk.TreeViewColumn('Timezone', cellrendererautocomplete, text=1)
@@ -143,7 +117,7 @@ class SettingsWindow(Gtk.Window):
         frame.pack_start(hbox, True, True, 0)
 
         # time format for World Clocks
-        time_format = SETTINGS.get_string('time-format')
+        time_format = self.settings.get('worldclocks-timeformat')
         hbox = Gtk.HBox()
         label = Gtk.Label(_('Time format for World Clocks'))
         self.entry_timeformat = Gtk.Entry()
@@ -152,13 +126,19 @@ class SettingsWindow(Gtk.Window):
         self.entry_timeformat.set_text(time_format)
         frame.pack_start(hbox, False, False, 0)
 
+        link_button = Gtk.LinkButton(
+            'http://timezonedb.com/time-zones',
+            _('Browse valid timezone values by country (online)')
+        )
+        frame.pack_start(link_button, False, False, 0)
+
         # bottom buttons
         box_buttons = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL, border_width=0, spacing=10)
 
-        btn_new = Gtk.Button(stock=Gtk.STOCK_NEW)
-        btn_new.connect('clicked', self._add_entry)
-        box_buttons.pack_start(btn_new, False, False, 0)
+        btn_add = Gtk.Button(stock=Gtk.STOCK_ADD)
+        btn_add.connect('clicked', self._add_entry)
+        box_buttons.pack_start(btn_add, False, False, 0)
 
         btn_remove = Gtk.Button(stock=Gtk.STOCK_REMOVE)
         btn_remove.connect('clicked', self._remove_entry)
@@ -169,8 +149,6 @@ class SettingsWindow(Gtk.Window):
         box_buttons.pack_end(btn_close, False, False, 0)
 
         btn_clear = Gtk.Button(stock=Gtk.STOCK_CLEAR)
-        btn_clear = Gtk.Button.new_from_stock(Gtk.STOCK_CLEAR)
-
         btn_clear.connect('clicked', self._clear_entries)
         box_buttons.pack_end(btn_clear, False, False, 0)
 
@@ -179,6 +157,26 @@ class SettingsWindow(Gtk.Window):
         frame.show_all()
         self.add(frame)
         self.show_all()
+
+    @staticmethod
+    def _get_timezones():
+        """ load list of timezones that the system is aware of """
+
+        timezones_tab = '/usr/share/zoneinfo/zone.tab'
+        if not os.path.exists(timezones_tab):
+            timezones_tab = '/usr/share/lib/zoneinfo/tab/zone_sun.tab'
+
+        if not os.path.exists(timezones_tab):
+            return []
+
+        timezones = subprocess.check_output(
+            ['/usr/bin/awk', '!/#/ {print $3}', timezones_tab])
+        timezones = sorted(timezones.strip('\n').split('\n'))
+
+        # https://github.com/simonwiles/cinnamon_applets/issues/7
+        timezones.append('UTC')
+
+        return timezones
 
     def _reorder(self, widget, action):
         tsel = self.treeview.get_selection()
@@ -208,17 +206,24 @@ class SettingsWindow(Gtk.Window):
 
     def _add_entry(self, widget):
         self.liststore_worldclocks.insert(
-                  len(self.liststore_worldclocks), ('London', 'Europe/London'))
+            len(self.liststore_worldclocks),
+            ('Coordinated Universal Time', 'UTC')
+        )
 
     def _remove_entry(self, widget):
         self.liststore_worldclocks.remove(
-                               self.treeview.get_selection().get_selected()[1])
+            self.treeview.get_selection().get_selected()[1])
 
     def _save_settings(self):
-        print [row[0] for row in self.liststore_worldclocks]
-        SETTINGS.set_value('worldclocks', GLib.Variant('as',
-                       ['|'.join(row) for row in self.liststore_worldclocks]))
-        SETTINGS.set_string('time-format', self.entry_timeformat.get_text())
+        self.settings.set(
+            'worldclocks',
+            ['|'.join(row) for row in self.liststore_worldclocks]
+        )
+        self.settings.set(
+            'worldclocks-timeformat',
+            self.entry_timeformat.get_text()
+        )
+        self.settings.save()
 
     def _exit_application(self, *args):
         try:
@@ -226,6 +231,37 @@ class SettingsWindow(Gtk.Window):
         except:
             pass
         Gtk.main_quit()
+
+
+class AppletSettings(object):
+
+    def __init__(self, uuid):
+        self.settings_json = os.path.expanduser(os.path.join(
+            '~', '.cinnamon', 'configs', uuid, '{}.json'.format(uuid)))
+
+        try:
+            with io.open(self.settings_json, 'r', encoding='utf8') as handle:
+                self.settings = json.loads(
+                    handle.read(), object_pairs_hook=collections.OrderedDict)
+        except (IOError, json.JSONDecodeError) as excptn:
+            default_schema = os.path.join(APPLET_DIR, 'settings-schema.json')
+            with io.open(default_schema, 'r', encoding='utf8') as handle:
+                self.settings = json.loads(
+                    handle.read(), object_pairs_hook=collections.OrderedDict)
+
+    def get(self, key):
+        try:
+            return self.settings[key]['value']
+        except KeyError as excptn:
+            return self.settings[key]['default']
+
+    def set(self, key, value):
+        self.settings[key]['value'] = value
+
+    def save(self):
+        with io.open(self.settings_json, 'w', encoding='utf-8') as handle:
+            handle.write(unicode(json.dumps(
+                self.settings, ensure_ascii=False, indent=2)))
 
 
 class CellRendererAutoComplete(Gtk.CellRendererText):
@@ -256,7 +292,7 @@ class CellRendererAutoComplete(Gtk.CellRendererText):
         Gtk.CellRendererText.__init__(self)
 
     def do_start_editing(
-               self, event, treeview, path, background_area, cell_area, flags):
+            self, event, treeview, path, background_area, cell_area, flags):
         if not self.get_property('editable'):
             return
         saved_text = self.get_property('text')
@@ -283,9 +319,6 @@ class CellRendererAutoComplete(Gtk.CellRendererText):
 
 
 if __name__ == "__main__":
-
-    # Initialize and load gsettings values
-    SETTINGS = get_settings(METADATA['settings-schema'])
 
     SettingsWindow()
     Gtk.main()
