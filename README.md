@@ -22,6 +22,7 @@ Notes:
 
 Version History:
 ----------------
+* v1.0 (2013-08-28) -- rewrite to update to Cinnamon 2.0 support, and move to the Cinnamon 1.8+ settings api.
 * v0.6 (2013-06-25) -- minor optimization.
 * v0.5 (2013-06-23) -- Updated to use `GLib.DateTime` and `TimeZone` to handle the timezone conversion (credit to Maciej Katafiasz, a.k.a. [mathrick](https://github.com/mathrick)).
 * v0.4 (2012-12-25) -- Updated to use `GSettings` (now updates automatically when the settings are changed, without the need to restart Cinnamon).

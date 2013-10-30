@@ -37,7 +37,7 @@
  "worldclock-setup-button" : {
     "type" : "button",
     "description" : "Configure World-clocks",
-    "callback" : "on_config_worldclocks",
+    "callback" : "_launch_worldclocks_config",
     "tooltip" : "Add, remove and configure additional clocks and format."
  },
  "worldclocks" : {
