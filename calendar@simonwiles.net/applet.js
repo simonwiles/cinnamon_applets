@@ -84,7 +84,7 @@ MyApplet.prototype = {
             this._eventList = null;
 
             // Calendar
-            this._calendar = new Calendar.Calendar(this._eventSource, this.settings);
+            this._calendar = new Calendar.Calendar(this.settings);
             vbox.add(this._calendar.actor);
 
 
@@ -251,7 +251,7 @@ MyApplet.prototype = {
     },
 
     _launch_worldclocks_config: function() {
-        Util.spawnCommandLine("python " + APPLET_DIR + "/world_clock_calendar_settings.py");
+        Util.spawnCommandLine("/usr/bin/env python2 " + APPLET_DIR + "/world_clock_calendar_settings.py");
     },
 
     _initRightClickMenu: function () {

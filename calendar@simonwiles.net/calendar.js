@@ -1,6 +1,5 @@
 // -*- mode: js; js-indent-level: 4; indent-tabs-mode: nil -*-
 
-const DBus = imports.dbus;
 const Clutter = imports.gi.Clutter;
 const Gio = imports.gi.Gio;
 const Lang = imports.lang;
@@ -14,6 +13,14 @@ const Settings = imports.ui.settings;
 const MSECS_IN_DAY = 24 * 60 * 60 * 1000;
 const WEEKDATE_HEADER_WIDTH_DIGITS = 3;
 const SHOW_WEEKDATE_KEY = 'show-weekdate';
+
+String.prototype.capitalize = function() {
+    return this.charAt(0).toUpperCase() + this.slice(1);
+}
+
+String.prototype.first_cap = function() {
+    return this.charAt(0).toUpperCase();
+}
 
 // in org.cinnamon.desktop.interface
 const CLOCK_FORMAT_KEY        = 'clock-format';
@@ -106,51 +113,20 @@ function _getDigitWidth(actor){
 }
 
 function _getCalendarDayAbbreviation(dayNumber) {
-    let abbreviations = [
-        /* Translators: Calendar grid abbreviation for Sunday.
-         *
-         * NOTE: These grid abbreviations are always shown together
-         * and in order, e.g. "S M T W T F S".
-         */
-        C_("grid sunday", "S"),
-        /* Translators: Calendar grid abbreviation for Monday */
-        C_("grid monday", "M"),
-        /* Translators: Calendar grid abbreviation for Tuesday */
-        C_("grid tuesday", "T"),
-        /* Translators: Calendar grid abbreviation for Wednesday */
-        C_("grid wednesday", "W"),
-        /* Translators: Calendar grid abbreviation for Thursday */
-        C_("grid thursday", "T"),
-        /* Translators: Calendar grid abbreviation for Friday */
-        C_("grid friday", "F"),
-        /* Translators: Calendar grid abbreviation for Saturday */
-        C_("grid saturday", "S")
-    ];
-    return abbreviations[dayNumber];
-}
 
-function _getEventDayAbbreviation(dayNumber) {
+    // This returns an array of abbreviated day names, starting with Sunday.
+    // We use 2014/03/02 (months are zero-based in JS) because it was a Sunday
+
     let abbreviations = [
-        /* Translators: Event list abbreviation for Sunday.
-         *
-         * NOTE: These list abbreviations are normally not shown together
-         * so they need to be unique (e.g. Tuesday and Thursday cannot
-         * both be 'T').
-         */
-        C_("list sunday", "Su"),
-        /* Translators: Event list abbreviation for Monday */
-        C_("list monday", "M"),
-        /* Translators: Event list abbreviation for Tuesday */
-        C_("list tuesday", "T"),
-        /* Translators: Event list abbreviation for Wednesday */
-        C_("list wednesday", "W"),
-        /* Translators: Event list abbreviation for Thursday */
-        C_("list thursday", "Th"),
-        /* Translators: Event list abbreviation for Friday */
-        C_("list friday", "F"),
-        /* Translators: Event list abbreviation for Saturday */
-        C_("list saturday", "S")
+        new Date(2014, 2, 2).toLocaleFormat('%a'),
+        new Date(2014, 2, 3).toLocaleFormat('%a'),
+        new Date(2014, 2, 4).toLocaleFormat('%a'),
+        new Date(2014, 2, 5).toLocaleFormat('%a'),
+        new Date(2014, 2, 6).toLocaleFormat('%a'),
+        new Date(2014, 2, 7).toLocaleFormat('%a'),
+        new Date(2014, 2, 8).toLocaleFormat('%a')
     ];
+
     return abbreviations[dayNumber];
 }
 
@@ -168,58 +144,6 @@ CalendarEvent.prototype = {
         this.allDay = allDay;
     }
 };
-
-// Interface for appointments/events - e.g. the contents of a calendar
-//
-
-// First, an implementation with no events
-function EmptyEventSource() {
-    this._init();
-}
-
-EmptyEventSource.prototype = {
-    _init: function() {
-    },
-
-    requestRange: function(begin, end) {
-    },
-
-    getEvents: function(begin, end) {
-        let result = [];
-        return result;
-    },
-
-    hasEvents: function(day) {
-        return false;
-    }
-};
-Signals.addSignalMethods(EmptyEventSource.prototype);
-
-const CalendarServerIface = {
-    name: 'org.Cinnamon.CalendarServer',
-    methods: [{ name: 'GetEvents',
-                inSignature: 'xxb',
-                outSignature: 'a(sssbxxa{sv})' }],
-    signals: [{ name: 'Changed',
-                inSignature: '' }]
-};
-
-const CalendarServer = function () {
-    this._init();
-};
-
-CalendarServer.prototype = {
-     _init: function() {
-         DBus.session.proxifyObject(this, 'org.Cinnamon.CalendarServer', '/org/Cinnamon/CalendarServer');
-     }
-};
-
-DBus.proxifyPrototype(CalendarServer.prototype, CalendarServerIface);
-
-// an implementation that reads data from a session bus service
-function DBusEventSource(owner) {
-    this._init(owner);
-}
 
 function _datesEqual(a, b) {
     if (a < b)
@@ -239,127 +163,12 @@ function _dateIntervalsOverlap(a0, a1, b0, b1)
         return true;
 }
 
-
-DBusEventSource.prototype = {
-    _init: function(owner) {
-        this._resetCache();
-
-        this._dbusProxy = new CalendarServer(owner);
-        this._dbusProxy.connect('Changed', Lang.bind(this, this._onChanged));
-
-        DBus.session.watch_name('org.Cinnamon.CalendarServer',
-                                false, // do not launch a name-owner if none exists
-                                Lang.bind(this, this._onNameAppeared),
-                                Lang.bind(this, this._onNameVanished));
-    },
-
-    _resetCache: function() {
-        this._events = [];
-        this._lastRequestBegin = null;
-        this._lastRequestEnd = null;
-    },
-
-    _onNameAppeared: function(owner) {
-        this._resetCache();
-        this._loadEvents(true);
-    },
-
-    _onNameVanished: function(oldOwner) {
-        this._resetCache();
-        this.emit('changed');
-    },
-
-    _onChanged: function() {
-        this._loadEvents(false);
-    },
-
-    _onEventsReceived: function(appointments) {
-        let newEvents = [];
-        if (appointments != null) {
-            for (let n = 0; n < appointments.length; n++) {
-                let a = appointments[n];
-                let date = new Date(a[4] * 1000);
-                let end = new Date(a[5] * 1000);
-                let summary = a[1];
-                let allDay = a[3];
-                let event = new CalendarEvent(date, end, summary, allDay);
-                newEvents.push(event);
-            }
-            newEvents.sort(function(event1, event2) {
-                return event1.date.getTime() - event2.date.getTime();
-            });
-        }
-
-        this._events = newEvents;
-        this.emit('changed');
-    },
-
-    _loadEvents: function(forceReload) {
-        if (this._curRequestBegin && this._curRequestEnd){
-            let callFlags = 0;
-            if (forceReload)
-                callFlags |= DBus.CALL_FLAG_START;
-            this._dbusProxy.GetEventsRemote(this._curRequestBegin.getTime() / 1000,
-                                            this._curRequestEnd.getTime() / 1000,
-                                            forceReload,
-                                            Lang.bind(this, this._onEventsReceived),
-                                            callFlags);
-        }
-    },
-
-    requestRange: function(begin, end, forceReload) {
-        if (forceReload || !(_datesEqual(begin, this._lastRequestBegin) && _datesEqual(end, this._lastRequestEnd))) {
-            this._lastRequestBegin = begin;
-            this._lastRequestEnd = end;
-            this._curRequestBegin = begin;
-            this._curRequestEnd = end;
-            this._loadEvents(forceReload);
-        }
-    },
-
-    getEvents: function(begin, end) {
-        let result = [];
-        for(let n = 0; n < this._events.length; n++) {
-            let event = this._events[n];
-            if (_dateIntervalsOverlap (event.date, event.end, begin, end)) {
-                result.push(event);
-            }
-        }
-        return result;
-    },
-
-    hasEvents: function(day) {
-        let dayBegin = _getBeginningOfDay(day);
-        let dayEnd = _getEndOfDay(day);
-
-        let events = this.getEvents(dayBegin, dayEnd);
-
-        if (events.length == 0)
-            return false;
-
-        return true;
-    }
-};
-Signals.addSignalMethods(DBusEventSource.prototype);
-
-// Calendar:
-// @eventSource: is an object implementing the EventSource API, e.g. the
-// requestRange(), getEvents(), hasEvents() methods and the ::changed signal.
-function Calendar(eventSource, settings) {
-    this._init(eventSource, settings);
+function Calendar(settings) {
+    this._init(settings);
 }
 
 Calendar.prototype = {
-    _init: function(eventSource, settings) {
-        if (eventSource) {
-            this._eventSource = eventSource;
-
-            this._eventSource.connect('changed', Lang.bind(this,
-                                                           function() {
-                                                               this._update(false);
-                                                           }));
-        }
-
+    _init: function(settings) {
         this._weekStart = Cinnamon.util_get_week_start();
         this._weekdate = NaN;
         this._digitWidth = NaN;
@@ -551,7 +360,7 @@ Calendar.prototype = {
     _update: function(forceReload) {
         let now = new Date();
 
-        this._monthLabel.text = this._selectedDate.toLocaleFormat('%B');
+        this._monthLabel.text = this._selectedDate.toLocaleFormat('%B').capitalize();
         this._yearLabel.text = this._selectedDate.toLocaleFormat('%Y');
 
         // Remove everything but the topBox and the weekday labels
@@ -572,8 +381,7 @@ Calendar.prototype = {
         while (true) {
             let button = new St.Button({ label: iter.getDate().toString() });
 
-            if (!this._eventSource)
-                button.reactive = false;
+            button.reactive = false;
 
             let iterStr = iter.toUTCString();
             button.connect('clicked', Lang.bind(this, function() {
@@ -581,7 +389,6 @@ Calendar.prototype = {
                 this.setDate(newlySelectedDate, false);
             }));
 
-            let hasEvents = this._eventSource && this._eventSource.hasEvents(iter);
             let styleClass = 'calendar-day-base calendar-day';
             if (_isWorkDay(iter))
                 styleClass += ' calendar-work-day'
@@ -601,9 +408,6 @@ Calendar.prototype = {
 
             if (_sameDay(this._selectedDate, iter))
                 button.add_style_pseudo_class('active');
-
-            if (hasEvents)
-                styleClass += ' calendar-day-with-events'
 
             button.style_class = styleClass;
 
@@ -628,148 +432,9 @@ Calendar.prototype = {
                 }
             }
         }
-        // Signal to the event source that we are interested in events
-        // only from this date range
-        if (this._eventSource)
-            this._eventSource.requestRange(beginDate, iter, forceReload);
     }
 };
 
 Signals.addSignalMethods(Calendar.prototype);
 
-function EventsList(eventSource) {
-    this._init(eventSource);
-}
 
-EventsList.prototype = {
-    _init: function(eventSource) {
-        this.actor = new St.BoxLayout({ vertical: true, style_class: 'events-header-vbox'});
-        this._date = new Date();
-        this._eventSource = eventSource;
-        this._eventSource.connect('changed', Lang.bind(this, this._update));
-        this._desktopSettings = new Gio.Settings({ schema: 'org.cinnamon.desktop.interface' });
-        this._desktopSettings.connect('changed', Lang.bind(this, this._update));
-        this._weekStart = Cinnamon.util_get_week_start();
-
-        this._update();
-    },
-
-    _addEvent: function(dayNameBox, timeBox, eventTitleBox, includeDayName, day, time, desc) {
-        if (includeDayName) {
-            dayNameBox.add(new St.Label( { style_class: 'events-day-dayname',
-                                           text: day } ),
-                           { x_fill: true } );
-        }
-        timeBox.add(new St.Label( { style_class: 'events-day-time',
-                                    text: time} ),
-                    { x_fill: true } );
-        eventTitleBox.add(new St.Label( { style_class: 'events-day-task',
-                                          text: desc} ));
-    },
-
-    _addPeriod: function(header, begin, end, includeDayName, showNothingScheduled) {
-        if (!this._eventSource)
-            return;
-
-        let events = this._eventSource.getEvents(begin, end);
-
-        let clockFormat = this._desktopSettings.get_string(CLOCK_FORMAT_KEY);;
-
-        if (events.length == 0 && !showNothingScheduled)
-            return;
-
-        let vbox = new St.BoxLayout( {vertical: true} );
-        this.actor.add(vbox);
-
-        vbox.add(new St.Label({ style_class: 'events-day-header', text: header }));
-        let box = new St.BoxLayout({style_class: 'events-header-hbox'});
-        let dayNameBox = new St.BoxLayout({ vertical: true, style_class: 'events-day-name-box' });
-        let timeBox = new St.BoxLayout({ vertical: true, style_class: 'events-time-box' });
-        let eventTitleBox = new St.BoxLayout({ vertical: true, style_class: 'events-event-box' });
-        box.add(dayNameBox, {x_fill: false});
-        box.add(timeBox, {x_fill: false});
-        box.add(eventTitleBox, {expand: true});
-        vbox.add(box);
-
-        for (let n = 0; n < events.length; n++) {
-            let event = events[n];
-            let dayString = _getEventDayAbbreviation(event.date.getDay());
-            let timeString = _formatEventTime(event, clockFormat);
-            let summaryString = event.summary;
-            this._addEvent(dayNameBox, timeBox, eventTitleBox, includeDayName, dayString, timeString, summaryString);
-        }
-
-        if (events.length == 0 && showNothingScheduled) {
-            let now = new Date();
-            /* Translators: Text to show if there are no events */
-            let nothingEvent = new CalendarEvent(now, now, _("Nothing Scheduled"), true);
-            let timeString = _formatEventTime(nothingEvent, clockFormat);
-            this._addEvent(dayNameBox, timeBox, eventTitleBox, false, "", timeString, nothingEvent.summary);
-        }
-    },
-
-    _showOtherDay: function(day) {
-        this.actor.destroy_children();
-
-        let dayBegin = _getBeginningOfDay(day);
-        let dayEnd = _getEndOfDay(day);
-
-        let dayString;
-        let now = new Date();
-        if (_sameYear(day, now))
-            /* Translators: Shown on calendar heading when selected day occurs on current year */
-            dayString = day.toLocaleFormat(C_("calendar heading", "%A, %B %d"));
-        else
-            /* Translators: Shown on calendar heading when selected day occurs on different year */
-            dayString = day.toLocaleFormat(C_("calendar heading", "%A, %B %d, %Y"));
-        this._addPeriod(dayString, dayBegin, dayEnd, false, true);
-    },
-
-    _showToday: function() {
-        this.actor.destroy_children();
-
-        let now = new Date();
-        let dayBegin = _getBeginningOfDay(now);
-        let dayEnd = _getEndOfDay(now);
-        this._addPeriod(_("Today"), dayBegin, dayEnd, false, true);
-
-        let tomorrowBegin = new Date(dayBegin.getTime() + 86400 * 1000);
-        let tomorrowEnd = new Date(dayEnd.getTime() + 86400 * 1000);
-        this._addPeriod(_("Tomorrow"), tomorrowBegin, tomorrowEnd, false, true);
-
-        if (dayEnd.getDay() <= 4 + this._weekStart) {
-            /* If now is within the first 5 days we show "This week" and
-             * include events up until and including Saturday/Sunday
-             * (depending on whether a week starts on Sunday/Monday).
-             */
-            let thisWeekBegin = new Date(dayBegin.getTime() + 2 * 86400 * 1000);
-            let thisWeekEnd = new Date(dayEnd.getTime() + (6 + this._weekStart - dayEnd.getDay()) * 86400 * 1000);
-            this._addPeriod(_("This week"), thisWeekBegin, thisWeekEnd, true, false);
-        } else {
-            /* otherwise it's one of the two last days of the week ... show
-             * "Next week" and include events up until and including *next*
-             * Saturday/Sunday
-             */
-            let nextWeekBegin = new Date(dayBegin.getTime() + 2 * 86400 * 1000);
-            let nextWeekEnd = new Date(dayEnd.getTime() + (13 + this._weekStart - dayEnd.getDay()) * 86400 * 1000);
-            this._addPeriod(_("Next week"), nextWeekBegin, nextWeekEnd, true, false);
-        }
-    },
-
-    // Sets the event list to show events from a specific date
-    setDate: function(date) {
-        if (!_sameDay(date, this._date)) {
-            this._date = date;
-            this._update();
-        }
-    },
-
-    _update: function() {
-        let today = new Date();
-        if (_sameDay (this._date, today)) {
-            this._showToday();
-        } else {
-            this._showOtherDay(this._date);
-        }
-    }
-};
