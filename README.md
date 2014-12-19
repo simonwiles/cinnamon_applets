@@ -5,7 +5,7 @@ UUID: calendar@simonwiles.net
 
 A fork of the Cinnamon calendar applet with support for displaying multiple timezones.
 
-Current Version: 0.6 (2013-06-25).
+Current Version: 1.1 (2014-12-18).
 
 ![World Clock Calendar Screenshot](https://raw.github.com/simonwiles/cinnamon_applets/master/calendar_screenshot.png "World Clock Calendar Screenshot")
 
@@ -15,6 +15,7 @@ Features:
 * Show one or more additional clocks for any timezone supported by the system.
 * Settings dialogue to add/remove/edit/re-order clocks.
 * Tool-tip shows the additional clocks.
+* [Recently described as “super slick” by OMG! Ubuntu!](http://www.omgubuntu.co.uk/2014/12/add-time-zones-world-clock-ubuntu); thanks!
 
 Notes:
 ------
@@ -22,6 +23,7 @@ Notes:
 
 Version History:
 ----------------
+* v1.1 (2014-12-18) -- first Cinnamon 2.4 compatible version.
 * v1.0 (2013-08-28) -- rewrite to update to Cinnamon 2.0 support, and move to the Cinnamon 1.8+ settings api.
 * v0.6 (2013-06-25) -- minor optimization.
 * v0.5 (2013-06-23) -- Updated to use `GLib.DateTime` and `TimeZone` to handle the timezone conversion (credit to Maciej Katafiasz, a.k.a. [mathrick](https://github.com/mathrick)).
