@@ -123,14 +123,19 @@ MyApplet.prototype = {
             this.settings.bindProperty(Settings.BindingDirection.IN, "use-custom-format", "use_custom_format", this.on_settings_changed, null);
             this.settings.bindProperty(Settings.BindingDirection.IN, "custom-format", "custom_format", this.on_settings_changed, null);
 
-            // https://bugzilla.gnome.org/show_bug.cgi?id=655129
-            this._upClient = new UPowerGlib.Client();
-            this._upClient.connect('notify-resume', this._updateClockAndDate);
-
             // Track changes to world-clock settings
             this.settings.bindProperty(Settings.BindingDirection.IN, "worldclocks", "worldclocks", addWorldClocks, null);
             this.settings.bindProperty(Settings.BindingDirection.IN, "worldclocks-timeformat", "worldclocks_timeformat", addWorldClocks, null);
-            this._upClient.connect('notify-resume', addWorldClocks);
+
+            // https://bugzilla.gnome.org/show_bug.cgi?id=655129
+            this._upClient = new UPowerGlib.Client();
+            try {
+                this._upClient.connect('notify-resume', this._updateClockAndDate);
+                this._upClient.connect('notify-resume', addWorldClocks);
+            } catch (e) {
+                this._upClient.connect('notify::resume', this._updateClockAndDate);
+                this._upClient.connect('notify::resume', addWorldClocks);
+            }
 
             // Start the clock
             this.on_settings_changed();
