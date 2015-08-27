@@ -5,7 +5,7 @@ UUID: calendar@simonwiles.net
 
 A fork of the Cinnamon calendar applet with support for displaying multiple timezones.
 
-Current Version: 1.1 (2014-12-18).
+Current Version: 1.2 (2015-08-26).
 
 ![World Clock Calendar Screenshot](https://raw.github.com/simonwiles/cinnamon_applets/master/calendar_screenshot.png "World Clock Calendar Screenshot")
 
