@@ -23,6 +23,7 @@ Notes:
 
 Version History:
 ----------------
+* v1.2 (2015-08-26) -- update support for more environments, including multiple distinct instances of the applet.
 * v1.1 (2014-12-18) -- first Cinnamon 2.4 compatible version.
 * v1.0 (2013-08-28) -- rewrite to update to Cinnamon 2.0 support, and move to the Cinnamon 1.8+ settings api.
 * v0.6 (2013-06-25) -- minor optimization.
@@ -36,3 +37,4 @@ Credits:
 * Clem and the Mint Team for the original calendar applet
 * [mbokil](http://cinnamon-spices.linuxmint.com/users/view/354) for the idea and code to move the "Date and Time Settings" to a right-click menu.
 * Maciej Katafiasz, a.k.a. [mathrick](https://github.com/mathrick) for the overdue update to `GLib` for the timezone handling.
+* [gsmcmullin](https://github.com/gsmcmullin) for code updates

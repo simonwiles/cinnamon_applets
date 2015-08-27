@@ -1,15 +1,17 @@
 /*
  *   World Clock Calendar applet calendar@simonwiles.net
  *   Fork of the Cinnamon calendar applet with support for displaying multiple timezones.
- *   version 1.0
+ *   version 1.2
  */
 
+/* global imports, global */
+/* exported _onVertSepRepaint, main */
+"use strict";
 
 const EXTENSION_UUID = "calendar@simonwiles.net";
 const APPLET_DIR = imports.ui.appletManager.appletMeta[EXTENSION_UUID].path;
 
 const Applet = imports.ui.applet;
-const Gio = imports.gi.Gio;
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
 const Clutter = imports.gi.Clutter;
@@ -21,7 +23,6 @@ const Settings = imports.ui.settings;
 const AppletDir = imports.ui.appletManager.applets[EXTENSION_UUID];
 const Calendar = AppletDir.calendar;
 const GLib = imports.gi.GLib;
-const Gtk = imports.gi.Gtk;
 
 let DEFAULT_FORMAT = _("%l:%M %p");
 
@@ -30,8 +31,8 @@ function _onVertSepRepaint (area)
     let cr = area.get_context();
     let themeNode = area.get_theme_node();
     let [width, height] = area.get_surface_size();
-    let stippleColor = themeNode.get_color('-stipple-color');
-    let stippleWidth = themeNode.get_length('-stipple-width');
+    let stippleColor = themeNode.get_color("-stipple-color");
+    let stippleWidth = themeNode.get_length("-stipple-width");
     let x = Math.floor(width/2) + 0.5;
     cr.moveTo(x, 0);
     cr.lineTo(x, height);
@@ -39,7 +40,7 @@ function _onVertSepRepaint (area)
     cr.setDash([1, 3], 1); // Hard-code for now
     cr.setLineWidth(stippleWidth);
     cr.stroke();
-};
+}
 
 function rpad(str, pad_with, length) {
     while (str.length < length) { str = str + pad_with; }
@@ -67,7 +68,7 @@ MyApplet.prototype = {
             this._initContextMenu();
             this._initRightClickMenu();
 
-            this._calendarArea = new St.BoxLayout({name: 'calendarArea' });
+            this._calendarArea = new St.BoxLayout({name: "calendarArea" });
             this.menu.addActor(this._calendarArea);
 
             // Fill up the first column
@@ -77,7 +78,7 @@ MyApplet.prototype = {
 
             // Date
             this._date = new St.Label();
-            this._date.style_class = 'datemenu-date-label';
+            this._date.style_class = "datemenu-date-label";
             vbox.add(this._date);
 
             this._eventSource = null;
@@ -102,15 +103,16 @@ MyApplet.prototype = {
 
                 this._worldclocks = [];
                 this._worldclock_labels = [];
-                for (i in this.worldclocks) { this._worldclocks[i] = this.worldclocks[i].split('|'); }
+                var i;
+                for (i in this.worldclocks) { this._worldclocks[i] = this.worldclocks[i].split("|"); }
                 for (i in this._worldclocks) {
                     this._worldclocks[i][1] = GLib.TimeZone.new(this._worldclocks[i][1]);
 
-                    let tz = new St.BoxLayout({vertical: false})
-                    let tz_label = new St.Label({ style_class: 'datemenu-date-label', text: this._worldclocks[i][0] });
-                    tz.add(tz_label, {x_align: St.Align.START, expand: true, x_fill: false})
-                    this._worldclock_labels[i] = new St.Label({ style_class: 'datemenu-date-label' });
-                    tz.add(this._worldclock_labels[i], {x_align: St.Align.END, expand: true, x_fill: false})
+                    let tz = new St.BoxLayout({vertical: false});
+                    let tz_label = new St.Label({ style_class: "datemenu-date-label", text: this._worldclocks[i][0] });
+                    tz.add(tz_label, {x_align: St.Align.START, expand: true, x_fill: false});
+                    this._worldclock_labels[i] = new St.Label({ style_class: "datemenu-date-label" });
+                    tz.add(this._worldclock_labels[i], {x_align: St.Align.END, expand: true, x_fill: false});
                     this._worldclocks_box.add(tz);
                 }
                 this.max_length = this._worldclocks.reduce(function (a, b) { return a[0].length > b[0].length ? a : b; })[0].length;
@@ -130,11 +132,11 @@ MyApplet.prototype = {
             // https://bugzilla.gnome.org/show_bug.cgi?id=655129
             this._upClient = new UPowerGlib.Client();
             try {
-                this._upClient.connect('notify-resume', this._updateClockAndDate);
-                this._upClient.connect('notify-resume', addWorldClocks);
+                this._upClient.connect("notify-resume", this._updateClockAndDate);
+                this._upClient.connect("notify-resume", addWorldClocks);
             } catch (e) {
-                this._upClient.connect('notify::resume', this._updateClockAndDate);
-                this._upClient.connect('notify::resume', addWorldClocks);
+                this._upClient.connect("notify::resume", this._updateClockAndDate);
+                this._upClient.connect("notify::resume", addWorldClocks);
             }
 
             // Start the clock
@@ -182,12 +184,12 @@ MyApplet.prototype = {
 
         let tooltip = [];
         tooltip.push(dateFormattedFull);
-        for (i in this._worldclocks) {
-            let tz = this._get_world_time(displayDate, this._worldclocks[i][1])
+        for (var i in this._worldclocks) {
+            let tz = this._get_world_time(displayDate, this._worldclocks[i][1]);
             this._worldclock_labels[i].set_text(tz);
-            tooltip.push(rpad(this._worldclocks[i][0], '\xA0', this.max_length + 10) + tz);
+            tooltip.push(rpad(this._worldclocks[i][0], "\xA0", this.max_length + 10) + tz);
         }
-        this.set_applet_tooltip(tooltip.join('\n'));
+        this.set_applet_tooltip(tooltip.join("\n"));
 
         if (dateFormattedFull !== this._lastDateFormattedFull) {
             this._date.set_text(dateFormattedFull);
@@ -219,7 +221,7 @@ MyApplet.prototype = {
         }
 
         // Whenever the menu is opened, select today
-        this.menu.connect('open-state-changed', Lang.bind(this, function(menu, isOpen) {
+        this.menu.connect("open-state-changed", Lang.bind(this, function(menu, isOpen) {
             if (isOpen) {
                 let now = new Date();
                 /* Passing true to setDate() forces events to be reloaded. We
@@ -233,7 +235,7 @@ MyApplet.prototype = {
                  *     properly working
                  *
                  * Since this only happens when the menu is opened, the cost
-                 * isn't very big.
+                 * isn"t very big.
                  */
                 this._calendar.setDate(now, true);
                 // No need to update this._eventList as ::selected-date-changed
@@ -252,20 +254,20 @@ MyApplet.prototype = {
     },
 
     _launch_applet_config: function() {
-        Util.spawn(['cinnamon-settings', 'applets', EXTENSION_UUID]);
+        Util.spawn(["cinnamon-settings", "applets", EXTENSION_UUID]);
     },
 
     _launch_worldclocks_config: function() {
-        Util.spawnCommandLine("/usr/bin/env python2 " + APPLET_DIR + "/world_clock_calendar_settings.py");
+        Util.spawnCommandLine("/usr/bin/env python2 " + APPLET_DIR + "/world_clock_calendar_settings.py --instance-id " + this.instance_id);
     },
 
     _initRightClickMenu: function () {
+        // this._applet_context_menu.addMenuItem(new Applet.MenuItem(
+        //     _("Configure applet"), "system-run-symbolic", Lang.bind(this, this._launch_applet_config)));
         this._applet_context_menu.addMenuItem(new Applet.MenuItem(
-            _('Configure applet'), 'system-run-symbolic', Lang.bind(this, this._launch_applet_config)));
+            _("Edit World Clocks"), "system-run-symbolic", Lang.bind(this, this._launch_worldclocks_config)));
         this._applet_context_menu.addMenuItem(new Applet.MenuItem(
-            _('Edit World Clocks'), 'system-run-symbolic', Lang.bind(this, this._launch_worldclocks_config)));
-        this._applet_context_menu.addMenuItem(new Applet.MenuItem(
-            _('Date and Time Settings'), 'system-run-symbolic', Lang.bind(this, this._launch_dateandtime_settings)));
+            _("Date and Time Settings"), "system-run-symbolic", Lang.bind(this, this._launch_dateandtime_settings)));
     },
 
 };

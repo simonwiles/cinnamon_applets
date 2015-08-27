@@ -12,15 +12,9 @@ const Settings = imports.ui.settings;
 
 const MSECS_IN_DAY = 24 * 60 * 60 * 1000;
 const WEEKDATE_HEADER_WIDTH_DIGITS = 3;
-const SHOW_WEEKDATE_KEY = 'show-weekdate';
-
-String.prototype.capitalize = function() {
-    return this.charAt(0).toUpperCase() + this.slice(1);
-}
-
-String.prototype.first_cap = function() {
-    return this.charAt(0).toUpperCase();
-}
+const SHOW_WEEKDATE_KEY = 'show-week-numbers';
+const FIRST_WEEKDAY_KEY = 'first-day-of-week';
+const DESKTOP_SCHEMA = 'org.cinnamon.desktop.interface';
 
 // in org.cinnamon.desktop.interface
 const CLOCK_FORMAT_KEY        = 'clock-format';
@@ -175,11 +169,14 @@ Calendar.prototype = {
         this.settings = settings;
 
         this.settings.connect("changed::show-week-numbers", Lang.bind(this, this._onSettingsChange));
+        this.desktop_settings = new Gio.Settings({ schema: DESKTOP_SCHEMA });
+        this.desktop_settings.connect("changed::" + FIRST_WEEKDAY_KEY, Lang.bind(this, this._onSettingsChange));
         this.show_week_numbers = this.settings.getValue("show-week-numbers");
 
         // Find the ordering for month/year in the calendar heading
 
-        switch (Gettext_gtk30.gettext('calendar:MY')) {
+        let var_name = 'calendar:MY';
+        switch (Gettext_gtk30.gettext(var_name)) {
         case 'calendar:MY':
             this._headerMonthFirst = true;
             break;
@@ -206,7 +203,14 @@ Calendar.prototype = {
     },
 
     _onSettingsChange: function(object, key, old_val, new_val) {
-        this.show_week_numbers = new_val;
+        switch (key) {
+	    case SHOW_WEEKDATE_KEY:
+		this.show_week_numbers = new_val;
+		break;
+	    case FIRST_WEEKDAY_KEY:
+		this._weekStart = Cinnamon.util_get_week_start();
+		break;
+	}
         this._buildHeader();
         this._update(false);
     },
@@ -416,7 +420,7 @@ Calendar.prototype = {
                            { row: row, col: offsetCols + (7 + iter.getDay() - this._weekStart) % 7 });
 
             if (this.show_week_numbers && iter.getDay() == 4) {
-                let label = new St.Label({ text: _getCalendarWeekForDate(iter).toString(),
+                let label = new St.Label({ text: iter.toLocaleFormat('%V'),
                                            style_class: 'calendar-day-base calendar-week-number'});
                 this.actor.add(label,
                                { row: row, col: 0, y_align: St.Align.MIDDLE });

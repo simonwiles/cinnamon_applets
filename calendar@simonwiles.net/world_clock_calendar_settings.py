@@ -10,6 +10,7 @@ __copyright__ = 'Copyright 2012, Simon Wiles'
 __license__ = 'GPL http://www.gnu.org/licenses/gpl.txt'
 __date__ = '2012-2013'
 
+import argparse
 import collections
 import io
 import os
@@ -21,8 +22,11 @@ from gi.repository import Gtk, GLib  # pylint: disable-msg=E0611
 #  (included in the standard library for Python >= 2.6) if not.
 try:
     import simplejson as json
+    JSONDecodeError = json.JSONDecodeError
 except ImportError:
     import json
+    class JSONDecodeError(Exception):
+        pass
 
 APPLET_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -35,12 +39,11 @@ from gettext import gettext as _
 class SettingsWindow(Gtk.Window):
     """ Build settings panel window """
 
-    def __init__(self):
-
+    def __init__(self, args):
         metadata = json.load(io.open(
             os.path.join(APPLET_DIR, 'metadata.json'), 'r', encoding='utf8'))
 
-        self.settings = AppletSettings(metadata['uuid'])
+        self.settings = AppletSettings(metadata['uuid'], args.instance_id)
         Gtk.Window.__init__(self, title=metadata['name'])
 
         self.set_size_request(400, 300)
@@ -235,15 +238,17 @@ class SettingsWindow(Gtk.Window):
 
 class AppletSettings(object):
 
-    def __init__(self, uuid):
+    def __init__(self, uuid, instance_id):
+
+        _fn_basename = instance_id if instance_id is not None else uuid
         self.settings_json = os.path.expanduser(os.path.join(
-            '~', '.cinnamon', 'configs', uuid, '{}.json'.format(uuid)))
+            '~', '.cinnamon', 'configs', uuid, '{}.json'.format(_fn_basename)))
 
         try:
             with io.open(self.settings_json, 'r', encoding='utf8') as handle:
                 self.settings = json.loads(
                     handle.read(), object_pairs_hook=collections.OrderedDict)
-        except (IOError, json.JSONDecodeError) as excptn:
+        except (IOError, ValueError, JSONDecodeError) as excptn:
             default_schema = os.path.join(APPLET_DIR, 'settings-schema.json')
             with io.open(default_schema, 'r', encoding='utf8') as handle:
                 self.settings = json.loads(
@@ -261,7 +266,7 @@ class AppletSettings(object):
     def save(self):
         with io.open(self.settings_json, 'w', encoding='utf-8') as handle:
             handle.write(unicode(json.dumps(
-                self.settings, ensure_ascii=False, indent=2)))
+                self.settings, ensure_ascii=True, indent=2)))
 
 
 class CellRendererAutoComplete(Gtk.CellRendererText):
@@ -310,7 +315,7 @@ class CellRendererAutoComplete(Gtk.CellRendererText):
     def focus_out(self, entry, event, path):
         """ to ensure that changes are saved when the dialogue is closed with
             the widget still focussed, I'm emitting 'edited' on this event
-            instead of 'editing-done'. The is probably not the correct way,
+            instead of 'editing-done'. This is probably not the correct way,
             but it works very nicely :) """
         new_value = entry.get_text()
         if self.force_match and new_value not in self.completion_entries:
@@ -318,7 +323,18 @@ class CellRendererAutoComplete(Gtk.CellRendererText):
         self.emit('edited', path, new_value)
 
 
-if __name__ == "__main__":
+def main():
 
-    SettingsWindow()
+    parser = argparse.ArgumentParser(description=__program_name__)
+
+    parser.add_argument(
+        '-i', '--instance-id', action='store', default=None,
+        help='applet instance-id')
+
+    SettingsWindow(parser.parse_args())
     Gtk.main()
+
+
+
+if __name__ == "__main__":
+    main()
